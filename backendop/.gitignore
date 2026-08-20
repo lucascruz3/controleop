@@ -1,0 +1,16 @@
+# Dependências (pasta gigante gerada pelo npm)
+node_modules/
+
+# Variáveis de Ambiente (contém senhas do SQL Server e chaves do JWT)
+.env
+.env.local
+.env.production
+
+# Logs de erro do Node/NPM
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
