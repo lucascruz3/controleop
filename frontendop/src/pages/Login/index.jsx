@@ -1,12 +1,50 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './Login.css';
 
 export function Login() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Login realizado');
+    setError('');
+    setLoading(true);
+
+    try {
+      
+      const response = await fetch('http://localhost:3003/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Credenciais inválidas');
+      }
+
+      // Salva o token ou dados do usuário no localStorage
+      localStorage.setItem('@controloop:user', JSON.stringify(data.user));
+      if (data.token) {
+        localStorage.setItem('@controloop:token', data.token);
+      }
+
+      console.log('Login realizado com sucesso:', data);
+      
+      // Redireciona para a tela principal (dashboard)
+      navigate('/dashboard');
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,14 +77,24 @@ export function Login() {
             <p className="login-subtitle">Entre com suas credenciais para continuar.</p>
 
             <form onSubmit={handleSubmit}>
+              
+              {/* Mostra mensagem de erro caso exista */}
+              {error && (
+                <div style={{ color: 'red', marginBottom: '1rem', padding: '10px', backgroundColor: '#ffe6e6', borderRadius: '5px', textAlign: 'center' }}>
+                  {error}
+                </div>
+              )}
+
               <div className="input-group">
                 <label htmlFor="username">Usuário</label>
                 <input
                   id="username"
                   type="text"
-                  placeholder="Seu usuário de acesso"
+                  placeholder="Seu usuário"
                   autoComplete="username"
                   required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
 
@@ -56,9 +104,11 @@ export function Login() {
                   <input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Sua senha secreta"
+                    placeholder="******"
                     autoComplete="current-password"
                     required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                   />
 
                   <button
@@ -102,21 +152,23 @@ export function Login() {
                 </div>
               </div>
 
-              <button type="submit" className="login-button">
-                <span>Acessar Plataforma</span>
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
+              <button type="submit" className="login-button" disabled={loading}>
+                <span>{loading ? 'Acessando...' : 'Acessar Plataforma'}</span>
+                {!loading && (
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                )}
               </button>
             </form>
 
