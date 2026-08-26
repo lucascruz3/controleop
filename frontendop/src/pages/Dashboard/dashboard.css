@@ -343,7 +343,7 @@
 }
 
 .modal-body {
-  padding: 24px;
+  padding: 0 24px 24px 24px;
   overflow-y: auto;
 }
 
@@ -353,6 +353,7 @@
   border-collapse: collapse;
   color: #e0e0e0;
   font-size: 13px;
+  margin-top: 24px;
 }
 
 .modal-table th {
@@ -364,6 +365,7 @@
   background-color: #16181d;
   position: sticky;
   top: 0;
+  z-index: 10;
 }
 
 .modal-table td {

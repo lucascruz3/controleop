@@ -10,8 +10,17 @@ import {
 } from 'recharts';
 import './dashboard.css';
 
-const COLORS = ['#60a5fa', '#4ade80', '#f87171', '#fbbf24', '#a78bfa', '#ec4899', '#38bdf8', '#c084fc', '#f472b6'];
+const COLORS = [
+  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#14b8a6', '#d946ef', '#84cc16',
+  '#6366f1', '#22c55e', '#facc15', '#f43f5e', '#a855f7', '#0ea5e9', '#fb923c', '#2dd4bf', '#ec4899', '#a3e635',
+  '#1d4ed8', '#047857', '#b45309', '#b91c1c', '#6d28d9', '#0e7490', '#c2410c', '#0f766e', '#a21caf', '#4d7c0f',
+  '#93c5fd', '#6ee7b7', '#fde047', '#fca5a5', '#c4b5fd', '#67e8f9', '#fdba74', '#5eead4', '#fbcfe8', '#bef264'
+];
 
+const MATERIAL_COLORS = [
+  '#FF8042', '#00C49F', '#FFBB28', '#0088FE', '#A28CF2', '#FF6699', '#20B2AA', '#F08080', '#90EE90', '#DDA0DD',
+  '#F4A460', '#FFD700', '#40E0D0', '#FF69B4', '#CD5C5C', '#BA55D3', '#32CD32', '#4682B4', '#D2691E', '#87CEFA'
+];
 export function Dashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState([]);
@@ -89,7 +98,7 @@ export function Dashboard() {
 
   // Opções para o filtro
   const availableFases = Array.from(new Set(filteredData.map(d => String(d.FASEATUAL || 'NÃO DEFINIDA')))).sort();
-  const availableColecoes = Array.from(new Set(filteredData.map(d => String(d.COLECAO || 'NÃO DEFINIDA')))).sort();
+  const availableColecoes = Array.from(new Set(filteredData.map(d => String(d.SUBCOLECAO || 'NÃO DEFINIDA')))).sort();
 
   // Aplicação dos filtros do Menu Lateral
   const displayData = filteredData.filter(d => {
@@ -110,7 +119,7 @@ export function Dashboard() {
     }
 
     if (filters.fases.length > 0 && !filters.fases.includes(String(d.FASEATUAL || 'NÃO DEFINIDA'))) return false;
-    if (filters.colecoes.length > 0 && !filters.colecoes.includes(String(d.COLECAO || 'NÃO DEFINIDA'))) return false;
+    if (filters.colecoes.length > 0 && !filters.colecoes.includes(String(d.SUBCOLECAO || 'NÃO DEFINIDA'))) return false;
 
     return true;
   });
@@ -183,6 +192,48 @@ export function Dashboard() {
     Peso: Number(colecoesCount[key].Peso.toFixed(2))
   })).sort((a, b) => b.Quantidade - a.Quantidade); 
 
+  // --- TEMPO NA FASE ---
+  const today = new Date();
+  
+  // Adiciona a propriedade 'diasNaFase' aos itens
+  const dataWithDays = displayData.map(d => {
+    let diasNaFase = 0;
+    if (d.DATAFASE) {
+      const dataF = new Date(d.DATAFASE);
+      const diffTime = today - dataF;
+      diasNaFase = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      if (diasNaFase < 0) diasNaFase = 0; // Prevenção
+    }
+    return { ...d, diasNaFase };
+  });
+
+  // KPI 1: Tempo Médio na Fase
+  const totalDias = dataWithDays.reduce((acc, curr) => acc + curr.diasNaFase, 0);
+  const tempoMedio = dataWithDays.length > 0 ? (totalDias / dataWithDays.length).toFixed(1) : 0;
+
+  // Gráfico 2: Gargalos (Limite de 3 dias)
+  let noPrazo = 0;
+  let noLimite = 0;
+  let emAtraso = 0;
+
+  dataWithDays.forEach(d => {
+    if (d.diasNaFase <= 2) noPrazo++;
+    else if (d.diasNaFase === 3) noLimite++;
+    else emAtraso++;
+  });
+
+  const gargalosData = [
+    { name: 'No Prazo (Até 2 dias)', value: noPrazo, color: '#4ade80' },
+    { name: 'No Limite (3 dias)', value: noLimite, color: '#fbbf24' },
+    { name: 'Em Atraso (> 3 dias)', value: emAtraso, color: '#f87171' },
+  ].filter(item => item.value > 0);
+
+  // Lista 3: OPs Críticas
+  const opsCriticas = [...dataWithDays]
+    .filter(d => d.diasNaFase > 0)
+    .sort((a, b) => b.diasNaFase - a.diasNaFase)
+    .slice(0, 5);
+
   // Tooltip & Label customizados
   const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
@@ -222,14 +273,14 @@ export function Dashboard() {
           <input 
             type="text" 
             className="filter-input"
-            placeholder="Ex: 12345" 
+            placeholder="Ex: 152710003" 
             value={filters.searchOP} 
             onChange={e => setFilters({...filters, searchOP: e.target.value})} 
           />
         </div>
 
         <div className="filter-group">
-          <label>Abertura (Início)</label>
+          <label>Data Inicial</label>
           <input 
             type="date" 
             className="filter-input"
@@ -239,7 +290,7 @@ export function Dashboard() {
         </div>
 
         <div className="filter-group">
-          <label>Abertura (Fim)</label>
+          <label>Data Final</label>
           <input 
             type="date" 
             className="filter-input"
@@ -290,7 +341,7 @@ export function Dashboard() {
         <div className="dashboard-header">
           <div>
             <h1>Dashboard</h1>
-            <p>Visão geral da Produção - Total de {totalOPs} OPs em andamento</p>
+            <p>Controle do OP</p>
           </div>
           <div className="header-actions">
             <button onClick={fetchData} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', color: '#a0aab4', border: '1px solid #2a2e39', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}>
@@ -305,6 +356,14 @@ export function Dashboard() {
       <div className="kpi-grid">
         <div className="kpi-card">
           <div className="kpi-card-header">
+            <span className="kpi-title">Total de OPs</span>
+            <div className="kpi-icon bg-success"><CheckCircle size={16} /></div>
+          </div>
+          <div className="kpi-value">{totalOPs}</div>
+          <span className="kpi-subtitle text-success">OPs em andamento</span>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-card-header">
             <span className="kpi-title">Em Produção (Peças)</span>
             <div className="kpi-icon bg-purple"><Play size={16} /></div>
           </div>
@@ -317,15 +376,23 @@ export function Dashboard() {
             <div className="kpi-icon bg-info"><Box size={16} /></div>
           </div>
           <div className="kpi-value">{totalPeso.toFixed(2)} g</div>
-          <span className="kpi-subtitle text-info">Peso total nas OPs</span>
+          <span className="kpi-subtitle text-info">Peso total </span>
         </div>
         <div className="kpi-card">
           <div className="kpi-card-header">
-            <span className="kpi-title">Fases Ativas</span>
+            <span className="kpi-title">Total de Coleções</span>
             <div className="kpi-icon bg-warning"><Clock size={16} /></div>
           </div>
-          <div className="kpi-value">{Object.keys(fasesCount).length}</div>
-          <span className="kpi-subtitle text-warning">Setores em operação</span>
+          <div className="kpi-value">{Object.keys(colecoesCount).length}</div>
+          <span className="kpi-subtitle text-warning">Coleções em produção</span>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-card-header">
+            <span className="kpi-title">Tempo Médio na Fase</span>
+            <div className="kpi-icon bg-danger"><Calendar size={16} /></div>
+          </div>
+          <div className="kpi-value">{tempoMedio} <span style={{fontSize: '14px', color: '#a0aab4'}}>dias</span></div>
+          <span className="kpi-subtitle text-danger">Média de dias no setor</span>
         </div>
       </div>
 
@@ -356,7 +423,7 @@ export function Dashboard() {
 
         {/* Qtd por Setor */}
         <div className="chart-card">
-          <h3 className="chart-title">Qtd de Peças por Setor</h3>
+          <h3 className="chart-title">(%)Quantidade de Peças por Setor</h3>
           <div style={{ height: '350px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -372,7 +439,7 @@ export function Dashboard() {
 
         {/* Peso por Setor */}
         <div className="chart-card">
-          <h3 className="chart-title">Peso por Setor (g)</h3>
+          <h3 className="chart-title">Peso por Setor (%)</h3>
           <div style={{ height: '350px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -401,7 +468,7 @@ export function Dashboard() {
                 <div className="list-item" key={index} onClick={() => openModal(`Subcoleção: ${item.name}`, d => d.SUBCOLECAO === item.name)}>
                   <span className="list-name" title={item.name} style={{ width: '180px' }}>{item.name}</span>
                   <div className="list-bar-bg">
-                    <div className="list-bar-fill" style={{ width: `${barWidth}%`, backgroundColor: COLORS[(index+3) % COLORS.length] }}></div>
+                    <div className="list-bar-fill" style={{ width: `${barWidth}%`, backgroundColor: COLORS[index % COLORS.length] }}></div>
                   </div>
                   <div className="list-values" style={{ width: '120px', flexDirection: 'row', justifyContent: 'flex-end', gap: '16px', alignItems: 'center' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -435,7 +502,7 @@ export function Dashboard() {
                       key={mat} 
                       dataKey={mat} 
                       stackId="a" 
-                      fill={COLORS[(i+4) % COLORS.length]} 
+                      fill={MATERIAL_COLORS[i % MATERIAL_COLORS.length]} 
                       barSize={20}
                       onClick={(entry) => openModal(`Material: ${mat} (Setor: ${entry.name})`, d => d.MATERIAL === mat && (d.FASEATUAL || 'NÃO DEFINIDA') === entry.name)}
                       style={{ cursor: 'pointer' }}
@@ -447,6 +514,64 @@ export function Dashboard() {
           </div>
         </div>
         
+      </div>
+
+      {/* LINHA 3 DE GRÁFICOS (TEMPO NA FASE) */}
+      <div className="charts-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+        
+        {/* Gráfico de Gargalos */}
+        <div className="chart-card">
+          <h3 className="chart-title">Tempo de Permanência no Setor </h3>
+          <div style={{ height: '350px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={gargalosData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={110}
+                  paddingAngle={2}
+                  dataKey="value"
+                  onClick={(entry) => openModal(`OPs paradas: ${entry.name}`, d => {
+                    if (entry.name === 'No Prazo (Até 2 dias)') return d.diasNaFase <= 2;
+                    if (entry.name === 'No Limite (3 dias)') return d.diasNaFase === 3;
+                    return d.diasNaFase > 3;
+                  })}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {gargalosData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                </Pie>
+                <Tooltip contentStyle={{ backgroundColor: '#1c1f26', borderColor: '#2a2e39', color: '#fff', borderRadius: '8px' }} />
+                <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: '11px', color: '#a0aab4' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* OPs Críticas */}
+        <div className="chart-card">
+          <h3 className="chart-title">Top 5 OPs Críticas (Mais Antigas no Setor)</h3>
+          <div className="custom-list" style={{ maxHeight: '350px' }}>
+            {opsCriticas.length === 0 ? (
+              <div style={{ color: '#a0aab4', padding: '20px', textAlign: 'center' }}>Nenhuma OP com data</div>
+            ) : opsCriticas.map((item, index) => {
+              return (
+                <div className="list-item" key={index} onClick={() => openModal(`Detalhes OP: ${item.OP}`, d => d.OP === item.OP)}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '60%' }}>
+                    <span className="list-name" style={{ color: '#f87171' }}>OP {item.OP}</span>
+                    <span className="list-value-sub" style={{ fontSize: '11px' }}>Setor: {item.FASEATUAL}</span>
+                    <span className="list-value-sub" style={{ fontSize: '11px' }}>Entrada: {item.DATAFASE ? new Date(item.DATAFASE).toLocaleDateString('pt-BR') : '-'}</span>
+                  </div>
+                  <div className="list-values" style={{ width: '40%', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
+                    <span className="list-value-main" style={{ color: '#f87171', fontSize: '16px' }}>{item.diasNaFase} dias</span>
+                    <span className="list-value-sub" style={{ color: '#a0aab4' }}>parada</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* MODAL */}
@@ -466,6 +591,7 @@ export function Dashboard() {
                     <th>Descrição</th>
                     <th>Material</th>
                     <th>Fase Atual</th>
+                    <th>Data na Fase</th>
                     <th>Subcoleção</th>
                     <th>Qtd</th>
                     <th>Peso (g)</th>
@@ -479,9 +605,10 @@ export function Dashboard() {
                       <td>{item.DESCRICAO}</td>
                       <td style={{ color: '#fbbf24' }}>{item.MATERIAL || '-'}</td>
                       <td>{item.FASEATUAL}</td>
+                      <td>{item.DATAFASE ? new Date(item.DATAFASE).toLocaleDateString('pt-BR') : '-'}</td>
                       <td>{item.SUBCOLECAO || '-'}</td>
                       <td style={{ fontWeight: 600 }}>{item.QUANTIDADE}</td>
-                      <td>{item.PESO ? Number(item.PESO).toFixed(2) : '0.00'}</td>
+                      <td style={{ color: '#4ade80' }}>{item.PESO ? Number(item.PESO).toFixed(2) : '0.00'}</td>
                     </tr>
                   ))}
                 </tbody>
