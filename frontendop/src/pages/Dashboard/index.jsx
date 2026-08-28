@@ -35,11 +35,21 @@ export function Dashboard() {
     dateEnd: '',
     fases: [],
     colecoes: [],
-    searchOP: ''
+    searchOP: '',
+    pedido: ''
   });
 
-  const openModal = (title, filterFn) => {
-    const items = data.filter(filterFn);
+  // Estado para visões salvas
+  const [savedViews, setSavedViews] = useState([]);
+  const [newViewName, setNewViewName] = useState('');
+
+  // Estado para a tabela do modal
+  const [modalSearch, setModalSearch] = useState('');
+  const [modalSort, setModalSort] = useState({ key: null, direction: 'asc' });
+
+  const openModal = (title, items) => {
+    setModalSearch('');
+    setModalSort({ key: null, direction: 'asc' });
     setModal({ isOpen: true, title, items });
   };
 
@@ -52,7 +62,35 @@ export function Dashboard() {
       return;
     }
     fetchData();
+
+    const loadedViews = localStorage.getItem('@controloop:savedViews');
+    if (loadedViews) {
+      try {
+        setSavedViews(JSON.parse(loadedViews));
+      } catch (e) {
+        console.error('Erro ao carregar visões', e);
+      }
+    }
   }, [navigate]);
+
+  const handleSaveView = () => {
+    if (!newViewName.trim()) return;
+    const newView = { name: newViewName.trim(), filters: { ...filters } };
+    const updatedViews = [...savedViews, newView];
+    setSavedViews(updatedViews);
+    localStorage.setItem('@controloop:savedViews', JSON.stringify(updatedViews));
+    setNewViewName('');
+  };
+
+  const handleLoadView = (view) => {
+    setFilters(view.filters);
+  };
+
+  const handleDeleteView = (viewName) => {
+    const updatedViews = savedViews.filter(v => v.name !== viewName);
+    setSavedViews(updatedViews);
+    localStorage.setItem('@controloop:savedViews', JSON.stringify(updatedViews));
+  };
 
   const fetchData = async () => {
     try {
@@ -84,8 +122,12 @@ export function Dashboard() {
 
   const parseDateStr = (dateStr) => {
     if (!dateStr) return null;
-    const [day, month, year] = String(dateStr).split('/');
-    return new Date(`${year}-${month}-${day}T00:00:00`);
+    const str = String(dateStr);
+    if (str.includes('/')) {
+      const [day, month, year] = str.split(' ')[0].split('/');
+      return new Date(`${year}-${month}-${day}T00:00:00`);
+    }
+    return new Date(str);
   };
 
   // Filtrar P1 MERCADO no frontend
@@ -99,10 +141,12 @@ export function Dashboard() {
   // Opções para o filtro
   const availableFases = Array.from(new Set(filteredData.map(d => String(d.FASEATUAL || 'NÃO DEFINIDA')))).sort();
   const availableColecoes = Array.from(new Set(filteredData.map(d => String(d.SUBCOLECAO || 'NÃO DEFINIDA')))).sort();
+  const availablePedidos = Array.from(new Set(filteredData.map(d => String(d.PEDIDO || '')))).filter(p => p.trim() !== '').sort();
 
   // Aplicação dos filtros do Menu Lateral
   const displayData = filteredData.filter(d => {
     if (filters.searchOP && !String(d.OP || '').toLowerCase().includes(filters.searchOP.toLowerCase())) return false;
+    if (filters.pedido && String(d.PEDIDO || '') !== filters.pedido) return false;
     
     if (filters.dateStart || filters.dateEnd) {
       const dDate = parseDateStr(d.DATAABERTURA);
@@ -199,10 +243,12 @@ export function Dashboard() {
   const dataWithDays = displayData.map(d => {
     let diasNaFase = 0;
     if (d.DATAFASE) {
-      const dataF = new Date(d.DATAFASE);
-      const diffTime = today - dataF;
-      diasNaFase = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      if (diasNaFase < 0) diasNaFase = 0; // Prevenção
+      const dataF = parseDateStr(d.DATAFASE);
+      if (dataF && !isNaN(dataF.getTime())) {
+        const diffTime = today - dataF;
+        diasNaFase = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        if (diasNaFase < 0 || isNaN(diasNaFase)) diasNaFase = 0; // Prevenção
+      }
     }
     return { ...d, diasNaFase };
   });
@@ -248,7 +294,7 @@ export function Dashboard() {
   };
 
   const clearFilters = () => {
-    setFilters({ dateStart: '', dateEnd: '', fases: [], colecoes: [], searchOP: '' });
+    setFilters({ dateStart: '', dateEnd: '', fases: [], colecoes: [], searchOP: '', pedido: '' });
   };
 
   const toggleCheckbox = (listName, item) => {
@@ -259,6 +305,63 @@ export function Dashboard() {
     });
   };
 
+  const getModalDisplayItems = () => {
+    if (!modal.isOpen) return [];
+    let filtered = modal.items;
+    
+    // Search
+    if (modalSearch.trim()) {
+      const lowerSearch = modalSearch.toLowerCase();
+      filtered = filtered.filter(item => {
+        return (
+          String(item.PEDIDO || '').toLowerCase().includes(lowerSearch) ||
+          String(item.OP || '').toLowerCase().includes(lowerSearch) ||
+          String(item.PRODUTO || '').toLowerCase().includes(lowerSearch) ||
+          String(item.DESCRICAO || '').toLowerCase().includes(lowerSearch) ||
+          String(item.MATERIAL || '').toLowerCase().includes(lowerSearch) ||
+          String(item.FASEATUAL || '').toLowerCase().includes(lowerSearch) ||
+          String(item.SUBCOLECAO || '').toLowerCase().includes(lowerSearch) ||
+          String(item.DATAFASE ? parseDateStr(item.DATAFASE).toLocaleDateString('pt-BR') : '').includes(lowerSearch)
+        );
+      });
+    }
+
+    // Sort
+    if (modalSort.key) {
+      filtered = [...filtered].sort((a, b) => {
+        let valA = a[modalSort.key];
+        let valB = b[modalSort.key];
+
+        if (modalSort.key === 'QUANTIDADE' || modalSort.key === 'PESO') {
+          valA = Number(valA) || 0;
+          valB = Number(valB) || 0;
+        } else if (modalSort.key === 'DATAFASE') {
+          valA = parseDateStr(valA) ? parseDateStr(valA).getTime() : 0;
+          valB = parseDateStr(valB) ? parseDateStr(valB).getTime() : 0;
+        } else {
+          valA = String(valA || '').toLowerCase();
+          valB = String(valB || '').toLowerCase();
+        }
+
+        if (valA < valB) return modalSort.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return modalSort.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return filtered;
+  };
+
+  const handleModalSort = (key) => {
+    let direction = 'asc';
+    if (modalSort.key === key && modalSort.direction === 'asc') {
+      direction = 'desc';
+    }
+    setModalSort({ key, direction });
+  };
+
+  const modalDisplayItems = getModalDisplayItems();
+
   return (
     <div className="dashboard-layout">
       
@@ -267,6 +370,53 @@ export function Dashboard() {
         <div className="sidebar-title">
           <ShieldCheck size={20} color="#60a5fa" /> Filtros
         </div>
+
+        {/* --- SAVED VIEWS SECTION --- */}
+        <div className="filter-group">
+          <label>Salvar Visão Atual</label>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+            <input
+              type="text"
+              className="filter-input"
+              placeholder="Nome da visão..."
+              value={newViewName}
+              onChange={e => setNewViewName(e.target.value)}
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            <button 
+              onClick={handleSaveView}
+              style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', padding: '0 12px', cursor: 'pointer', fontSize: '13px' }}
+            >
+              Salvar
+            </button>
+          </div>
+          
+          {savedViews.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '12px' }}>
+              <label>Minhas Visões</label>
+              {savedViews.map((view, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1c1f26', padding: '6px 8px', borderRadius: '4px', border: '1px solid #2a2e39' }}>
+                  <span 
+                    onClick={() => handleLoadView(view)}
+                    style={{ color: '#60a5fa', cursor: 'pointer', flex: 1, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    title="Carregar visão"
+                  >
+                    {view.name}
+                  </span>
+                  <button 
+                    onClick={() => handleDeleteView(view.name)}
+                    style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px', display: 'flex' }}
+                    title="Excluir visão"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        <hr style={{ borderColor: '#2a2e39', borderStyle: 'solid', borderWidth: '1px 0 0 0', margin: '0 0 20px 0', width: '100%' }} />
 
         <div className="filter-group">
           <label>Buscar OP</label>
@@ -277,6 +427,20 @@ export function Dashboard() {
             value={filters.searchOP} 
             onChange={e => setFilters({...filters, searchOP: e.target.value})} 
           />
+        </div>
+
+        <div className="filter-group">
+          <label>Pedido</label>
+          <select 
+            className="filter-input"
+            value={filters.pedido} 
+            onChange={e => setFilters({...filters, pedido: e.target.value})} 
+          >
+            <option value="">Todos</option>
+            {availablePedidos.map(pedido => (
+              <option key={pedido} value={pedido}>{pedido}</option>
+            ))}
+          </select>
         </div>
 
         <div className="filter-group">
@@ -406,7 +570,7 @@ export function Dashboard() {
             {pieData.map((item, index) => {
               const barWidth = Math.max(item.percentage, 2); // Garante um preenchimento visual mínimo de 2%
               return (
-                <div className="list-item" key={index} onClick={() => openModal(`Etapa: ${item.originalName}`, d => (d.FASEATUAL || 'NÃO DEFINIDA') === item.originalName)}>
+                <div className="list-item" key={index} onClick={() => openModal(`Etapa: ${item.originalName}`, displayData.filter(d => (d.FASEATUAL || 'NÃO DEFINIDA') === item.originalName))}>
                   <span className="list-name" title={item.originalName}>{item.originalName}</span>
                   <div className="list-bar-bg">
                     <div className="list-bar-fill" style={{ width: `${barWidth}%`, backgroundColor: COLORS[index % COLORS.length] }}></div>
@@ -427,7 +591,7 @@ export function Dashboard() {
           <div style={{ height: '350px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={2} dataKey="value" onClick={(e) => openModal(`Etapa: ${e.originalName}`, d => (d.FASEATUAL || 'NÃO DEFINIDA') === e.originalName)} style={{ cursor: 'pointer' }} label={renderCustomLabel} labelLine={false}>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={2} dataKey="value" onClick={(e) => openModal(`Etapa: ${e.originalName}`, displayData.filter(d => (d.FASEATUAL || 'NÃO DEFINIDA') === e.originalName))} style={{ cursor: 'pointer' }} label={renderCustomLabel} labelLine={false}>
                   {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip contentStyle={{ backgroundColor: '#1c1f26', borderColor: '#2a2e39', color: '#fff', borderRadius: '8px' }} />
@@ -443,7 +607,7 @@ export function Dashboard() {
           <div style={{ height: '350px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={piePesoFase} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={2} dataKey="value" onClick={(e) => openModal(`Etapa: ${e.originalName}`, d => (d.FASEATUAL || 'NÃO DEFINIDA') === e.originalName)} style={{ cursor: 'pointer' }} label={renderCustomLabel} labelLine={false}>
+                <Pie data={piePesoFase} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={2} dataKey="value" onClick={(e) => openModal(`Etapa: ${e.originalName}`, displayData.filter(d => (d.FASEATUAL || 'NÃO DEFINIDA') === e.originalName))} style={{ cursor: 'pointer' }} label={renderCustomLabel} labelLine={false}>
                   {piePesoFase.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip contentStyle={{ backgroundColor: '#1c1f26', borderColor: '#2a2e39', color: '#fff', borderRadius: '8px' }} />
@@ -465,7 +629,7 @@ export function Dashboard() {
               const percentage = Math.round((item.Quantidade / totalPecas) * 100) || 0;
               const barWidth = Math.max(percentage, 2); // Preenchimento mínimo visual
               return (
-                <div className="list-item" key={index} onClick={() => openModal(`Subcoleção: ${item.name}`, d => d.SUBCOLECAO === item.name)}>
+                <div className="list-item" key={index} onClick={() => openModal(`Subcoleção: ${item.name}`, displayData.filter(d => d.SUBCOLECAO === item.name))}>
                   <span className="list-name" title={item.name} style={{ width: '180px' }}>{item.name}</span>
                   <div className="list-bar-bg">
                     <div className="list-bar-fill" style={{ width: `${barWidth}%`, backgroundColor: COLORS[index % COLORS.length] }}></div>
@@ -504,7 +668,7 @@ export function Dashboard() {
                       stackId="a" 
                       fill={MATERIAL_COLORS[i % MATERIAL_COLORS.length]} 
                       barSize={20}
-                      onClick={(entry) => openModal(`Material: ${mat} (Setor: ${entry.name})`, d => d.MATERIAL === mat && (d.FASEATUAL || 'NÃO DEFINIDA') === entry.name)}
+                      onClick={(entry) => openModal(`Material: ${mat} (Setor: ${entry.name})`, displayData.filter(d => d.MATERIAL === mat && (d.FASEATUAL || 'NÃO DEFINIDA') === entry.name))}
                       style={{ cursor: 'pointer' }}
                     />
                   ))}
@@ -533,11 +697,11 @@ export function Dashboard() {
                   outerRadius={110}
                   paddingAngle={2}
                   dataKey="value"
-                  onClick={(entry) => openModal(`OPs paradas: ${entry.name}`, d => {
+                  onClick={(entry) => openModal(`OPs paradas: ${entry.name}`, dataWithDays.filter(d => {
                     if (entry.name === 'No Prazo (Até 2 dias)') return d.diasNaFase <= 2;
                     if (entry.name === 'No Limite (3 dias)') return d.diasNaFase === 3;
                     return d.diasNaFase > 3;
-                  })}
+                  }))}
                   style={{ cursor: 'pointer' }}
                 >
                   {gargalosData.map((e, i) => <Cell key={i} fill={e.color} />)}
@@ -557,11 +721,11 @@ export function Dashboard() {
               <div style={{ color: '#a0aab4', padding: '20px', textAlign: 'center' }}>Nenhuma OP com data</div>
             ) : opsCriticas.map((item, index) => {
               return (
-                <div className="list-item" key={index} onClick={() => openModal(`Detalhes OP: ${item.OP}`, d => d.OP === item.OP)}>
+                <div className="list-item" key={index} onClick={() => openModal(`Detalhes OP: ${item.OP}`, dataWithDays.filter(d => d.OP === item.OP))}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '60%' }}>
                     <span className="list-name" style={{ color: '#f87171' }}>OP {item.OP}</span>
                     <span className="list-value-sub" style={{ fontSize: '11px' }}>Setor: {item.FASEATUAL}</span>
-                    <span className="list-value-sub" style={{ fontSize: '11px' }}>Entrada: {item.DATAFASE ? new Date(item.DATAFASE).toLocaleDateString('pt-BR') : '-'}</span>
+                    <span className="list-value-sub" style={{ fontSize: '11px' }}>Entrada: {item.DATAFASE ? parseDateStr(item.DATAFASE).toLocaleDateString('pt-BR') : '-'}</span>
                   </div>
                   <div className="list-values" style={{ width: '40%', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
                     <span className="list-value-main" style={{ color: '#f87171', fontSize: '16px' }}>{item.diasNaFase} dias</span>
@@ -578,34 +742,45 @@ export function Dashboard() {
       {modal.isOpen && (
         <div className="modal-overlay" onClick={closeModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{modal.title} ({modal.items.length} Ordens)</h2>
-              <button className="modal-close-btn" onClick={closeModal}><X size={20} /></button>
+            <div className="modal-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2>{modal.title} ({modalDisplayItems.length} Ordens)</h2>
+                <button className="modal-close-btn" onClick={closeModal}><X size={20} /></button>
+              </div>
+              <input 
+                type="text" 
+                className="filter-input"
+                placeholder="Pesquisar por OP, Produto, Descrição..."
+                value={modalSearch}
+                onChange={e => setModalSearch(e.target.value)}
+              />
             </div>
             <div className="modal-body">
               <table className="modal-table">
                 <thead>
                   <tr>
-                    <th>OP</th>
-                    <th>Produto</th>
-                    <th>Descrição</th>
-                    <th>Material</th>
-                    <th>Fase Atual</th>
-                    <th>Data na Fase</th>
-                    <th>Subcoleção</th>
-                    <th>Qtd</th>
-                    <th>Peso (g)</th>
+                    <th onClick={() => handleModalSort('PEDIDO')} style={{ cursor: 'pointer' }}>Pedido {modalSort.key === 'PEDIDO' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th onClick={() => handleModalSort('OP')} style={{ cursor: 'pointer' }}>OP {modalSort.key === 'OP' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th onClick={() => handleModalSort('PRODUTO')} style={{ cursor: 'pointer' }}>Produto {modalSort.key === 'PRODUTO' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th onClick={() => handleModalSort('DESCRICAO')} style={{ cursor: 'pointer' }}>Descrição {modalSort.key === 'DESCRICAO' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th onClick={() => handleModalSort('MATERIAL')} style={{ cursor: 'pointer' }}>Material {modalSort.key === 'MATERIAL' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th onClick={() => handleModalSort('FASEATUAL')} style={{ cursor: 'pointer' }}>Fase Atual {modalSort.key === 'FASEATUAL' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th onClick={() => handleModalSort('DATAFASE')} style={{ cursor: 'pointer' }}>Data na Fase {modalSort.key === 'DATAFASE' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th onClick={() => handleModalSort('SUBCOLECAO')} style={{ cursor: 'pointer' }}>Subcoleção {modalSort.key === 'SUBCOLECAO' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th onClick={() => handleModalSort('QUANTIDADE')} style={{ cursor: 'pointer' }}>Qtd {modalSort.key === 'QUANTIDADE' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th onClick={() => handleModalSort('PESO')} style={{ cursor: 'pointer' }}>Peso (g) {modalSort.key === 'PESO' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {modal.items.map((item, i) => (
+                  {modalDisplayItems.map((item, i) => (
                     <tr key={i}>
+                      <td style={{ fontWeight: 500 }}>{item.PEDIDO || '-'}</td>
                       <td style={{ fontWeight: 500, color: '#60a5fa' }}>{item.OP}</td>
                       <td>{item.PRODUTO}</td>
                       <td>{item.DESCRICAO}</td>
                       <td style={{ color: '#fbbf24' }}>{item.MATERIAL || '-'}</td>
                       <td>{item.FASEATUAL}</td>
-                      <td>{item.DATAFASE ? new Date(item.DATAFASE).toLocaleDateString('pt-BR') : '-'}</td>
+                      <td>{item.DATAFASE ? parseDateStr(item.DATAFASE).toLocaleDateString('pt-BR') : '-'}</td>
                       <td>{item.SUBCOLECAO || '-'}</td>
                       <td style={{ fontWeight: 600 }}>{item.QUANTIDADE}</td>
                       <td style={{ color: '#4ade80' }}>{item.PESO ? Number(item.PESO).toFixed(2) : '0.00'}</td>
