@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Play, CheckCircle, Clock, PauseCircle, Box, ShieldCheck, 
-  RefreshCw, Calendar, X
+  RefreshCw, Calendar, X, UserPlus
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -25,6 +25,9 @@ export function Dashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Obtém usuário do localStorage para condicional de renderização
+  const currentUser = JSON.parse(localStorage.getItem('@controloop:user') || '{}');
 
   // Estado do Modal
   const [modal, setModal] = useState({ isOpen: false, title: '', items: [] });
@@ -385,7 +388,7 @@ export function Dashboard() {
             />
             <button 
               onClick={handleSaveView}
-              style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', padding: '0 12px', cursor: 'pointer', fontSize: '13px' }}
+              className="btn-sidebar-save"
             >
               Salvar
             </button>
@@ -405,7 +408,7 @@ export function Dashboard() {
                   </span>
                   <button 
                     onClick={() => handleDeleteView(view.name)}
-                    style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px', display: 'flex' }}
+                    className="btn-delete-view"
                     title="Excluir visão"
                   >
                     <X size={14} />
@@ -508,10 +511,15 @@ export function Dashboard() {
             <p>Controle do OP</p>
           </div>
           <div className="header-actions">
-            <button onClick={fetchData} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', color: '#a0aab4', border: '1px solid #2a2e39', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}>
+            {currentUser && currentUser.acesso === 'admin' && (
+              <button className="btn-header btn-primary" onClick={() => navigate('/register')}>
+                <UserPlus size={16} /> Cadastrar Usuário
+              </button>
+            )}
+            <button className="btn-header btn-secondary" onClick={fetchData}>
               <RefreshCw size={16} /> Atualizar Base
             </button>
-            <button onClick={handleLogout} style={{ background: '#f87171', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}>
+            <button className="btn-header btn-danger" onClick={handleLogout}>
               Sair
             </button>
           </div>

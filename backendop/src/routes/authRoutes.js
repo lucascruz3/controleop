@@ -63,4 +63,41 @@ router.post('/login', async (req, res) => {
   }
 });
 
+router.post('/register', async (req, res) => {
+  const { nome, email, senha, acesso } = req.body;
+
+  if (!nome || !email || !senha || !acesso) {
+    return res.status(400).json({ message: 'Todos os campos são obrigatórios.' });
+  }
+
+  try {
+    const requestCheck = poolLocal.request();
+    requestCheck.input('email', sql.VarChar, email);
+    const checkResult = await requestCheck.query('SELECT TOP 1 * FROM usuarios WHERE email = @email');
+
+    if (checkResult.recordset.length > 0) {
+      return res.status(400).json({ message: 'Email já cadastrado.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(senha, salt);
+
+    const requestInsert = poolLocal.request();
+    requestInsert.input('nome', sql.VarChar, nome);
+    requestInsert.input('email', sql.VarChar, email);
+    requestInsert.input('senha', sql.VarChar, hashedPassword);
+    requestInsert.input('acesso', sql.VarChar, acesso);
+
+    await requestInsert.query(`
+      INSERT INTO usuarios (nome, email, senha, acesso)
+      VALUES (@nome, @email, @senha, @acesso)
+    `);
+
+    return res.status(201).json({ message: 'Usuário cadastrado com sucesso!' });
+  } catch (error) {
+    console.error('Erro ao cadastrar usuário:', error);
+    return res.status(500).json({ message: 'Erro interno ao cadastrar usuário.' });
+  }
+});
+
 module.exports = router;
