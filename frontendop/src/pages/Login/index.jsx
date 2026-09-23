@@ -17,7 +17,8 @@ export function Login() {
 
     try {
       
-      const response = await fetch('http://localhost:3003/api/login', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3003';
+      const response = await fetch(`${apiUrl}/api/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password }),
@@ -38,7 +39,8 @@ export function Login() {
       console.log('Login realizado com sucesso:', data);
       
       // Redireciona para a tela principal (dashboard)
-      navigate('/dashboard');
+      // Redireciona para o Painel Principal (Hub) em vez do dashboard de fábrica direto
+      navigate('/home');
 
     } catch (err) {
       setError(err.message);

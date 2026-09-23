@@ -69,8 +69,8 @@ body {
 
 .login-container {
   width: 100%;
-  max-width: 1140px;
-  min-height: 690px;
+  max-width: 1000px;
+  min-height: 520px;
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   background: rgba(255, 255, 255, 0.85);
@@ -89,7 +89,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 60px;
+  padding: 40px;
 }
 
 .login-content {
@@ -122,8 +122,8 @@ body {
 }
 
 .login-content h1 {
-  margin: 32px 0 8px;
-  font-size: 48px;
+  margin: 20px 0 8px;
+  font-size: 36px;
   line-height: 1.1;
   font-weight: 800;
   letter-spacing: -1.5px;
@@ -134,7 +134,7 @@ body {
 }
 
 .login-subtitle {
-  margin: 0 0 48px;
+  margin: 0 0 32px;
   color: #64748b;
   font-size: 17px;
   font-weight: 400;
@@ -142,7 +142,7 @@ body {
 
 /* INPUTS */
 .input-group {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   position: relative;
 }
 
@@ -156,8 +156,8 @@ body {
 
 .input-group input {
   width: 100%;
-  height: 56px;
-  padding: 0 20px;
+  height: 48px;
+  padding: 0 16px;
   border: 2px solid #e2e8f0;
   border-radius: 14px;
   background: #ffffff;
@@ -214,8 +214,8 @@ body {
 /* BOTÃO */
 .login-button {
   width: 100%;
-  height: 60px;
-  margin-top: 16px;
+  height: 52px;
+  margin-top: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -284,7 +284,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 60px;
+  padding: 40px;
   overflow: hidden;
 }
 
@@ -317,8 +317,8 @@ body {
 }
 
 .brand-content h2 {
-  margin: 0 0 24px;
-  font-size: 56px;
+  margin: 0 0 16px;
+  font-size: 42px;
   line-height: 1.05;
   font-weight: 800;
   letter-spacing: -2px;
@@ -336,7 +336,7 @@ body {
 /* GRÁFICO DECORATIVO */
 .decorative-chart {
   position: relative;
-  height: 220px;
+  height: 180px;
   display: flex;
   align-items: flex-end;
   gap: 16px;

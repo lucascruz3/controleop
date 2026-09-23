@@ -28,7 +28,8 @@ export function Register() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3003/api/register', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3003';
+      const response = await fetch(`${apiUrl}/api/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome, email, senha, acesso }),

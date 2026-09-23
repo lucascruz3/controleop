@@ -1,7 +1,7 @@
 * {
   margin: 0;
   padding: 0;
-  box-sizing: border-border;
+  box-sizing: border-box;
 }
 
 body {
@@ -9,3 +9,6 @@ body {
   background-color: #f4f6f8;
   color: #333;
 }
+
+/* cache bust 3 */
+.force-update-v3 { color: transparent; }

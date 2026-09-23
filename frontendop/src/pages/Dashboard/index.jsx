@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Play, CheckCircle, Clock, PauseCircle, Box, ShieldCheck, 
-  RefreshCw, Calendar, X, UserPlus
+  RefreshCw, Calendar, X, UserPlus, Home
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -21,6 +21,14 @@ const MATERIAL_COLORS = [
   '#FF8042', '#00C49F', '#FFBB28', '#0088FE', '#A28CF2', '#FF6699', '#20B2AA', '#F08080', '#90EE90', '#DDA0DD',
   '#F4A460', '#FFD700', '#40E0D0', '#FF69B4', '#CD5C5C', '#BA55D3', '#32CD32', '#4682B4', '#D2691E', '#87CEFA'
 ];
+
+const CORES_DOS_MATERIAIS = {
+  'AU750': '#FACC15',       // Amarelo Ouro
+  'AG950': '#94A3B8',       // Cinza Prata
+  'BRONZE': '#B45309',      // Marrom Bronze escuro
+  'AUCONSERTO': '#f7b100',  // Amarelo alaranjado
+  'CONSERTO': '#EF4444'     // Vermelho
+};
 export function Dashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState([]);
@@ -31,6 +39,7 @@ export function Dashboard() {
 
   // Estado do Modal
   const [modal, setModal] = useState({ isOpen: false, title: '', items: [] });
+  const [selectedImage, setSelectedImage] = useState(null);
 
   // Estado dos Filtros
   const [filters, setFilters] = useState({
@@ -38,9 +47,12 @@ export function Dashboard() {
     dateEnd: '',
     fases: [],
     colecoes: [],
+    pedidos: [],
     searchOP: '',
-    pedido: ''
+    pedido: '' // Mantido para compatibilidade com visões antigas
   });
+
+  const [showFiltersMobile, setShowFiltersMobile] = useState(false);
 
   // Estado para visões salvas
   const [savedViews, setSavedViews] = useState([]);
@@ -98,7 +110,8 @@ export function Dashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3003/api/dashboard/ops');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3003';
+      const response = await fetch(`${apiUrl}/api/dashboard/ops`);
       if (!response.ok) throw new Error('Erro ao buscar dados');
       const result = await response.json();
       setData(result);
@@ -133,23 +146,12 @@ export function Dashboard() {
     return new Date(str);
   };
 
-  // Filtrar P1 MERCADO no frontend
-  const filteredData = data.filter(d => 
-    !String(d.FASEATUAL || '').includes('P1 MERCADO') && 
-    !String(d.COLECAO || '').includes('P1 MERCADO') &&
-    !String(d.SUBCOLECAO || '').includes('P1 MERCADO') &&
-    !String(d.PRODUTO || '').includes('P1 MERCADO')
-  );
-
-  // Opções para o filtro
-  const availableFases = Array.from(new Set(filteredData.map(d => String(d.FASEATUAL || 'NÃO DEFINIDA')))).sort();
-  const availableColecoes = Array.from(new Set(filteredData.map(d => String(d.SUBCOLECAO || 'NÃO DEFINIDA')))).sort();
-  const availablePedidos = Array.from(new Set(filteredData.map(d => String(d.PEDIDO || '')))).filter(p => p.trim() !== '').sort();
-
-  // Aplicação dos filtros do Menu Lateral
-  const displayData = filteredData.filter(d => {
+  // Aplica filtros gerais (exceto fase)
+  const baseData = data.filter(d => {
     if (filters.searchOP && !String(d.OP || '').toLowerCase().includes(filters.searchOP.toLowerCase())) return false;
-    if (filters.pedido && String(d.PEDIDO || '') !== filters.pedido) return false;
+    if (filters.pedido && typeof filters.pedido === 'string' && String(d.PEDIDO || '') !== filters.pedido) return false;
+    if (filters.pedidos && filters.pedidos.length > 0 && !filters.pedidos.includes(String(d.PEDIDO || ''))) return false;
+    if (filters.colecoes.length > 0 && !filters.colecoes.includes(String(d.SUBCOLECAO || 'NÃO DEFINIDA'))) return false;
     
     if (filters.dateStart || filters.dateEnd) {
       const dDate = parseDateStr(d.DATAABERTURA);
@@ -164,10 +166,21 @@ export function Dashboard() {
         }
       }
     }
+    return true;
+  });
 
+  const opsEncerradas = baseData.filter(d => String(d.FASEATUAL || '') === 'ENCERRADO');
+  const filteredData = baseData.filter(d => String(d.FASEATUAL || '') !== 'ENCERRADO');
+
+  // Opções para o filtro (usamos os dados originais não encerrados para que as opções não desapareçam ao clicar)
+  const notEncerradas = data.filter(d => String(d.FASEATUAL || '') !== 'ENCERRADO');
+  const availableFases = Array.from(new Set(notEncerradas.map(d => String(d.FASEATUAL || 'NÃO DEFINIDA')))).sort();
+  const availableColecoes = Array.from(new Set(notEncerradas.map(d => String(d.SUBCOLECAO || 'NÃO DEFINIDA')))).sort();
+  const availablePedidos = Array.from(new Set(notEncerradas.map(d => String(d.PEDIDO || '')))).filter(p => p.trim() !== '').sort();
+
+  // Aplicação final do filtro de fases no restante do dashboard
+  const displayData = filteredData.filter(d => {
     if (filters.fases.length > 0 && !filters.fases.includes(String(d.FASEATUAL || 'NÃO DEFINIDA'))) return false;
-    if (filters.colecoes.length > 0 && !filters.colecoes.includes(String(d.SUBCOLECAO || 'NÃO DEFINIDA'))) return false;
-
     return true;
   });
 
@@ -207,7 +220,7 @@ export function Dashboard() {
   // Material por Setor (Peso)
   const materialPorSetorMap = displayData.reduce((acc, curr) => {
     const fase = String(curr.FASEATUAL || 'NÃO DEFINIDA');
-    const mat = String(curr.MATERIAL || 'N/A');
+    const mat = String(curr.MATERIAL || 'N/A').trim();
     if (!acc[fase]) acc[fase] = {};
     if (!acc[fase][mat]) acc[fase][mat] = 0;
     acc[fase][mat] += parseFloat(curr.PESO || 0);
@@ -222,7 +235,7 @@ export function Dashboard() {
     return obj;
   });
   
-  const allMaterials = Array.from(new Set(displayData.map(d => String(d.MATERIAL || 'N/A'))));
+  const allMaterials = Array.from(new Set(displayData.map(d => String(d.MATERIAL || 'N/A').trim())));
 
   // Agrupar por Subcoleção (Qtd e Peso)
   const colecoesCount = displayData.reduce((acc, curr) => {
@@ -297,7 +310,7 @@ export function Dashboard() {
   };
 
   const clearFilters = () => {
-    setFilters({ dateStart: '', dateEnd: '', fases: [], colecoes: [], searchOP: '', pedido: '' });
+    setFilters({ dateStart: '', dateEnd: '', fases: [], colecoes: [], pedidos: [], searchOP: '', pedido: '' });
   };
 
   const toggleCheckbox = (listName, item) => {
@@ -368,10 +381,26 @@ export function Dashboard() {
   return (
     <div className="dashboard-layout">
       
+      {/* BOTÃO MOBILE PARA ABRIR FILTROS */}
+      <button 
+        className="btn-mobile-filters" 
+        onClick={() => setShowFiltersMobile(true)}
+      >
+        <ShieldCheck size={20} /> Filtros
+      </button>
+
+      {/* OVERLAY MOBILE PARA O MENU LATERAL */}
+      {showFiltersMobile && (
+        <div className="sidebar-overlay" onClick={() => setShowFiltersMobile(false)}></div>
+      )}
+
       {/* MENU LATERAL DE FILTROS */}
-      <div className="sidebar">
-        <div className="sidebar-title">
-          <ShieldCheck size={20} color="#60a5fa" /> Filtros
+      <div className={`sidebar ${showFiltersMobile ? 'show' : ''}`}>
+        <div className="sidebar-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldCheck size={20} color="#60a5fa" /> Filtros
+          </div>
+          <button className="btn-close-sidebar-mobile" onClick={() => setShowFiltersMobile(false)}><X size={20} /></button>
         </div>
 
         {/* --- SAVED VIEWS SECTION --- */}
@@ -434,16 +463,18 @@ export function Dashboard() {
 
         <div className="filter-group">
           <label>Pedido</label>
-          <select 
-            className="filter-input"
-            value={filters.pedido} 
-            onChange={e => setFilters({...filters, pedido: e.target.value})} 
-          >
-            <option value="">Todos</option>
+          <div className="checkbox-list">
             {availablePedidos.map(pedido => (
-              <option key={pedido} value={pedido}>{pedido}</option>
+              <label key={pedido} className="checkbox-label">
+                <input 
+                  type="checkbox" 
+                  checked={filters.pedidos?.includes(pedido) || false}
+                  onChange={() => toggleCheckbox('pedidos', pedido)}
+                />
+                {pedido}
+              </label>
             ))}
-          </select>
+          </div>
         </div>
 
         <div className="filter-group">
@@ -511,6 +542,9 @@ export function Dashboard() {
             <p>Controle do OP</p>
           </div>
           <div className="header-actions">
+            <button className="btn-header" style={{ background: '#3b82f6', color: 'white' }} onClick={() => navigate('/home')}>
+              <Home size={16} /> Início (Hub)
+            </button>
             {currentUser && currentUser.acesso === 'admin' && (
               <button className="btn-header btn-primary" onClick={() => navigate('/register')}>
                 <UserPlus size={16} /> Cadastrar Usuário
@@ -526,13 +560,26 @@ export function Dashboard() {
         </div>
 
       <div className="kpi-grid">
+        <div 
+          className="kpi-card" 
+          onClick={() => openModal('OPs Encerradas', opsEncerradas)}
+          style={{ cursor: 'pointer', border: '1px solid #10b981' }}
+          title="Clique para ver as OPs encerradas"
+        >
+          <div className="kpi-card-header">
+            <span className="kpi-title">OPs Encerradas</span>
+            <div className="kpi-icon bg-success"><CheckCircle size={16} /></div>
+          </div>
+          <div className="kpi-value">{opsEncerradas.length}</div>
+          <span className="kpi-subtitle text-success">Clique para listar OPs</span>
+        </div>
         <div className="kpi-card">
           <div className="kpi-card-header">
             <span className="kpi-title">Total de OPs</span>
-            <div className="kpi-icon bg-success"><CheckCircle size={16} /></div>
+            <div className="kpi-icon bg-info"><ShieldCheck size={16} /></div>
           </div>
           <div className="kpi-value">{totalOPs}</div>
-          <span className="kpi-subtitle text-success">OPs em andamento</span>
+          <span className="kpi-subtitle text-info">OPs em andamento</span>
         </div>
         <div className="kpi-card">
           <div className="kpi-card-header">
@@ -569,12 +616,12 @@ export function Dashboard() {
       </div>
 
       {/* LINHA 1 DE GRÁFICOS */}
-      <div className="charts-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))' }}>
+      <div className="charts-grid charts-row-1">
         
         {/* Produção por Etapa */}
         <div className="chart-card">
           <h3 className="chart-title">Produção por Etapa (Peças)</h3>
-          <div className="custom-list" style={{ maxHeight: '350px' }}>
+          <div className="custom-list" style={{ maxHeight: '350px', minWidth: '320px' }}>
             {pieData.map((item, index) => {
               const barWidth = Math.max(item.percentage, 2); // Garante um preenchimento visual mínimo de 2%
               return (
@@ -596,10 +643,10 @@ export function Dashboard() {
         {/* Qtd por Setor */}
         <div className="chart-card">
           <h3 className="chart-title">(%)Quantidade de Peças por Setor</h3>
-          <div style={{ height: '350px' }}>
+          <div style={{ height: '350px', minWidth: '320px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={2} dataKey="value" onClick={(e) => openModal(`Etapa: ${e.originalName}`, displayData.filter(d => (d.FASEATUAL || 'NÃO DEFINIDA') === e.originalName))} style={{ cursor: 'pointer' }} label={renderCustomLabel} labelLine={false}>
+                <Pie data={pieData} cx="45%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value" onClick={(e) => openModal(`Etapa: ${e.originalName}`, displayData.filter(d => (d.FASEATUAL || 'NÃO DEFINIDA') === e.originalName))} style={{ cursor: 'pointer' }} label={renderCustomLabel} labelLine={false}>
                   {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip contentStyle={{ backgroundColor: '#1c1f26', borderColor: '#2a2e39', color: '#fff', borderRadius: '8px' }} />
@@ -612,10 +659,10 @@ export function Dashboard() {
         {/* Peso por Setor */}
         <div className="chart-card">
           <h3 className="chart-title">Peso por Setor (%)</h3>
-          <div style={{ height: '350px' }}>
+          <div style={{ height: '350px', minWidth: '320px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={piePesoFase} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={2} dataKey="value" onClick={(e) => openModal(`Etapa: ${e.originalName}`, displayData.filter(d => (d.FASEATUAL || 'NÃO DEFINIDA') === e.originalName))} style={{ cursor: 'pointer' }} label={renderCustomLabel} labelLine={false}>
+                <Pie data={piePesoFase} cx="45%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value" onClick={(e) => openModal(`Etapa: ${e.originalName}`, displayData.filter(d => (d.FASEATUAL || 'NÃO DEFINIDA') === e.originalName))} style={{ cursor: 'pointer' }} label={renderCustomLabel} labelLine={false}>
                   {piePesoFase.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip contentStyle={{ backgroundColor: '#1c1f26', borderColor: '#2a2e39', color: '#fff', borderRadius: '8px' }} />
@@ -627,12 +674,12 @@ export function Dashboard() {
       </div>
 
       {/* LINHA 2 DE GRÁFICOS */}
-      <div className="charts-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))' }}>
+      <div className="charts-grid charts-row-2">
         
         {/* Produção por Subcoleção */}
         <div className="chart-card" style={{ flex: 2 }}>
           <h3 className="chart-title">Produção por Coleção</h3>
-          <div className="custom-list" style={{ maxHeight: '400px' }}>
+          <div className="custom-list" style={{ maxHeight: '400px', minWidth: '350px' }}>
             {subcolecoesData.map((item, index) => {
               const percentage = Math.round((item.Quantidade / totalPecas) * 100) || 0;
               const barWidth = Math.max(percentage, 2); // Preenchimento mínimo visual
@@ -660,7 +707,7 @@ export function Dashboard() {
         {/* Material por Setor (Gráfico de Barras Empilhadas) */}
         <div className="chart-card" style={{ flex: 2 }}>
           <h3 className="chart-title">Peso de Material por Setor (g)</h3>
-          <div style={{ height: '400px', overflowY: 'auto' }}>
+          <div style={{ height: '400px', overflowY: 'auto', minWidth: '350px' }}>
             <div style={{ height: `${Math.max(400, materialPorSetorData.length * 40)}px` }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={materialPorSetorData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
@@ -674,9 +721,9 @@ export function Dashboard() {
                       key={mat} 
                       dataKey={mat} 
                       stackId="a" 
-                      fill={MATERIAL_COLORS[i % MATERIAL_COLORS.length]} 
+                      fill={CORES_DOS_MATERIAIS[mat] || MATERIAL_COLORS[i % MATERIAL_COLORS.length]} 
                       barSize={20}
-                      onClick={(entry) => openModal(`Material: ${mat} (Setor: ${entry.name})`, displayData.filter(d => d.MATERIAL === mat && (d.FASEATUAL || 'NÃO DEFINIDA') === entry.name))}
+                      onClick={(entry) => openModal(`Material: ${mat} (Setor: ${entry.name})`, displayData.filter(d => String(d.MATERIAL || 'N/A').trim() === mat && (d.FASEATUAL || 'NÃO DEFINIDA') === entry.name))}
                       style={{ cursor: 'pointer' }}
                     />
                   ))}
@@ -689,12 +736,12 @@ export function Dashboard() {
       </div>
 
       {/* LINHA 3 DE GRÁFICOS (TEMPO NA FASE) */}
-      <div className="charts-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+      <div className="charts-grid charts-row-3">
         
         {/* Gráfico de Gargalos */}
         <div className="chart-card">
           <h3 className="chart-title">Tempo de Permanência no Setor </h3>
-          <div style={{ height: '350px' }}>
+          <div style={{ height: '350px', minWidth: '320px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -724,7 +771,7 @@ export function Dashboard() {
         {/* OPs Críticas */}
         <div className="chart-card">
           <h3 className="chart-title">Top 5 OPs Críticas (Mais Antigas no Setor)</h3>
-          <div className="custom-list" style={{ maxHeight: '350px' }}>
+          <div className="custom-list" style={{ maxHeight: '350px', minWidth: '320px' }}>
             {opsCriticas.length === 0 ? (
               <div style={{ color: '#a0aab4', padding: '20px', textAlign: 'center' }}>Nenhuma OP com data</div>
             ) : opsCriticas.map((item, index) => {
@@ -767,6 +814,7 @@ export function Dashboard() {
               <table className="modal-table">
                 <thead>
                   <tr>
+                    <th>Foto</th>
                     <th onClick={() => handleModalSort('PEDIDO')} style={{ cursor: 'pointer' }}>Pedido {modalSort.key === 'PEDIDO' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
                     <th onClick={() => handleModalSort('OP')} style={{ cursor: 'pointer' }}>OP {modalSort.key === 'OP' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
                     <th onClick={() => handleModalSort('PRODUTO')} style={{ cursor: 'pointer' }}>Produto {modalSort.key === 'PRODUTO' ? (modalSort.direction === 'asc' ? '↑' : '↓') : ''}</th>
@@ -782,6 +830,20 @@ export function Dashboard() {
                 <tbody>
                   {modalDisplayItems.map((item, i) => (
                     <tr key={i}>
+                      <td>
+                        {item.PRODUTO && (
+                          <img 
+                            src={`https://basel.com.br/img/fotos/${String(item.PRODUTO).trim()}.jpg`} 
+                            alt="Foto" 
+                            style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', background: '#1c1f26', cursor: 'pointer' }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedImage(`https://basel.com.br/img/fotos/${String(item.PRODUTO).trim()}.jpg`);
+                            }}
+                            onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; }}
+                          />
+                        )}
+                      </td>
                       <td style={{ fontWeight: 500 }}>{item.PEDIDO || '-'}</td>
                       <td style={{ fontWeight: 500, color: '#60a5fa' }}>{item.OP}</td>
                       <td>{item.PRODUTO}</td>
@@ -800,8 +862,28 @@ export function Dashboard() {
           </div>
         </div>
       )}
-
       </div>
+      
+      {/* MODAL DE IMAGEM AMPLIADA */}
+      {selectedImage && (
+        <div className="modal-overlay" onClick={() => setSelectedImage(null)} style={{ zIndex: 10000, padding: '20px' }}>
+          <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <button 
+              className="modal-close-btn" 
+              onClick={() => setSelectedImage(null)}
+              style={{ position: 'absolute', top: '-40px', right: '0', background: '#1c1f26' }}
+            >
+              <X size={24} />
+            </button>
+            <img 
+              src={selectedImage} 
+              alt="Ampliada" 
+              style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }} 
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

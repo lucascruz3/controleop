@@ -138,6 +138,7 @@
 .dashboard-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 24px 32px;
 }
 
@@ -237,7 +238,7 @@
 /* CARDS */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -287,10 +288,13 @@
 /* CHARTS SECTION */
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
+
+.charts-row-1 { grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); }
+.charts-row-2 { grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); }
+.charts-row-3 { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
 
 .chart-card {
   background-color: #1c1f26;
@@ -455,6 +459,7 @@
 .modal-body {
   padding: 0 24px 24px 24px;
   overflow-y: auto;
+  overflow-x: auto;
 }
 
 /* TABLE IN MODAL */
@@ -485,4 +490,116 @@
 
 .modal-table tbody tr:hover {
   background-color: rgba(255, 255, 255, 0.02);
+}
+
+.btn-mobile-filters, .btn-close-sidebar-mobile {
+  display: none;
+}
+
+/* MEDIA QUERIES PARA MOBILE */
+@media (max-width: 768px) {
+  .dashboard-layout {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  
+  .btn-mobile-filters {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: #2563eb;
+    color: white;
+    padding: 16px;
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  
+  .sidebar {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: -100%;
+    width: 280px;
+    height: 100vh;
+    background-color: #16181d;
+    z-index: 1000;
+    transition: left 0.3s ease;
+    border-right: 1px solid #2a2e39;
+    border-bottom: none;
+    padding: 24px 20px;
+    max-height: none;
+  }
+  
+  .sidebar.show {
+    left: 0;
+  }
+  
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 900;
+  }
+  
+  .btn-close-sidebar-mobile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #a0aab4;
+    cursor: pointer;
+  }
+  
+  .dashboard-content {
+    padding: 16px;
+    overflow-y: visible;
+  }
+  
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  
+  .btn-header {
+    flex: 1;
+    min-width: 140px;
+    justify-content: center;
+  }
+  
+  /* Corrige o overflow dos gráficos que saem pela lateral no celular */
+  .charts-row-1, .charts-row-2, .charts-row-3 {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .chart-card {
+    overflow-x: auto; /* Permite arrastar os gráficos horizontalmente se forem largos demais */
+  }
+  
+  .modal-content {
+    width: 95%;
+    max-width: none;
+  }
+  
+  .modal-body {
+    padding: 0 16px 16px 16px;
+  }
 }
